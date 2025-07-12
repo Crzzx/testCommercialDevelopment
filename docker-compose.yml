@@ -1,0 +1,87 @@
+
+  ```yaml
+version: '3.8'
+
+services:
+  # Zookeeper - нужен для работы Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # Kafka - наш брокер сообщений
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: kafka
+    ports:
+      # Этот порт нужен, если вы хотите подключиться к Kafka с локальной машины, а не из контейнера
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # База данных PostgreSQL
+  db:
+    image: postgres:14.1
+    container_name: postgres-db
+    ports:
+      - "5432:5432" # Пробрасываем порт на хост для удобного подключения через IDE
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=subscriptions
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # Сохраняем данные между перезапусками
+
+  # Eureka Server
+  eureka-server:
+    build: ./eureka-server # Указываем путь к папке с Dockerfile
+    container_name: eureka-server
+    ports:
+      - "8761:8761" # Пробрасываем порт панели Eureka
+    environment:
+      - SPRING_APPLICATION_NAME=eureka-server
+
+  # Subscription Service
+  subscription-service:
+    build: ./subscription-service
+    container_name: subscription-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - eureka-server
+      - db
+      - kafka
+    environment:
+      # Важно: используем имена контейнеров, а не localhost!
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/subscriptions
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080" # Основная точка входа в наше приложение
+    depends_on:
+      - eureka-server
+      - subscription-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
+
+  # Docker Volumes для сохранения данных
+volumes:
+  postgres-data:

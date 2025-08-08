@@ -48,6 +48,13 @@ services:
       - "8761:8761" # Пробрасываем порт панели Eureka
     environment:
       - SPRING_APPLICATION_NAME=eureka-server
+    healthcheck:
+      # Команда, которую Docker будет выполнять внутри контейнера для проверки
+      test: [ "CMD", "curl", "-f", "http://localhost:8761" ]
+      interval: 30s    # Проверять каждые 30 секунд
+      timeout: 10s     # Считать проверку проваленной через 10 секунд
+      retries: 5       # Попробовать 5 раз перед тем, как считать сервис "нездоровым"
+      start_period: 15s # Дать контейнеру 15 секунд на первоначальный запуск
 
   # Subscription Service
   subscription-service:
@@ -56,9 +63,12 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      - eureka-server
-      - db
-      - kafka
+      eureka-server:
+        condition: service_healthy
+      db:
+        condition: service_started
+      kafka:
+          condition: service_started
     environment:
       # Важно: используем имена контейнеров, а не localhost!
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
@@ -75,8 +85,12 @@ services:
     ports:
       - "8080:8080" # Основная точка входа в наше приложение
     depends_on:
-      - eureka-server
-      - subscription-service
+      # Ждем, пока eureka-server станет "здоровым"
+      eureka-server:
+        condition: service_healthy
+      # Ждем, пока subscription-service просто запустится (у него нет healthcheck)
+      subscription-service:
+        condition: service_started
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
       - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true

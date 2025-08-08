@@ -1,4 +1,4 @@
-erver:
+server:
   port: 8080
 
 eureka:
@@ -6,25 +6,29 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
-# --- ЕДИНЫЙ ПРАВИЛЬНЫЙ БЛОК 'spring' ---
 spring:
   application:
     name: api-gateway
   cloud:
     gateway:
-      # Отключаем автоматику, чтобы она нам не мешала
-      discovery:
-        locator:
-          enabled: false
-
-      # Настраиваем маршрут вручную
       routes:
-        - id: subscription_route
-          # Адрес назначения: сервис SUBSCRIPTION-SERVICE в Eureka
-          uri: http://172.18.0.6
+        - id: subscription_service_main_route
+          uri: lb://SUBSCRIPTION-SERVICE
           predicates:
-            # Правило сработает, если путь начинается с /subscriptions-api/
-            - Path=/subscriptions-api/**
+            - Path=/subs/**
           filters:
-            # "Отрезаем" /subscriptions-api от пути перед отправкой
             - StripPrefix=1
+
+# --- СЕКЦИЯ ДЛЯ МАКСИМАЛЬНО ПОДРОБНЫХ ЛОГОВ ---
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.cloud.loadbalancer: TRACE
+    reactor.netty.http.client: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"

@@ -11,24 +11,15 @@ spring:
     name: api-gateway
   cloud:
     gateway:
+      # Явно отключаем автоматику, чтобы не было конфликтов
+      discovery:
+        locator:
+          enabled: false
+
+      # Настраиваем наш единственный маршрут
       routes:
-        - id: subscription_service_main_route
+        - id: subscription_rewrite_route
           uri: lb://SUBSCRIPTION-SERVICE
           predicates:
-            - Path=/subs/**
-          filters:
-            - StripPrefix=1
-
-# --- СЕКЦИЯ ДЛЯ МАКСИМАЛЬНО ПОДРОБНЫХ ЛОГОВ ---
-logging:
-  level:
-    root: INFO
-    org.springframework.cloud.gateway: TRACE
-    org.springframework.cloud.loadbalancer: TRACE
-    reactor.netty.http.client: DEBUG
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"
+            # ПРАВИЛО: Срабатывать на пути, начинающиеся с /subscriptions/
+            - Path=/api/**
